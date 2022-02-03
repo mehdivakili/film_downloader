@@ -1,0 +1,1 @@
+D:/python/pythonw.exe main.py
