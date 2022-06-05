@@ -314,7 +314,7 @@ def download_sub(sub, directory, episode, offset=0):
             cookies[arg.name] = arg.value
         sub_query = '|'.join(s_qs[1:])
 
-    BASE_TEMP_DIR = '/\\temp'
+    BASE_TEMP_DIR = '\\temp'
     if not os.path.exists(BASE_TEMP_DIR):
         os.mkdir(BASE_TEMP_DIR)
 
@@ -363,7 +363,11 @@ def download_sub(sub, directory, episode, offset=0):
 
 def download_video(video, directory, episode, callback=lambda: None, sync=False, offset=0):
     video_link = video["link"]
-    directory = directory.format(episode) + '.' + video_link[-3:]
+    directory = directory.format(episode) + '.'
+    if  video_link[-3:] in ['mp4','mkv']:
+        directory += video_link[-3:]
+    else:
+        directory += 'mkv'
     link = video_link.format(episode + offset)
     if os.path.exists(directory):
         d = data_handle.download_database.get_download(directory)

@@ -68,6 +68,8 @@ def run(film_id, start, end, is_play=True):
                 break
 
             if is_play:
+                if video_is_running():
+                    kill_video_player()
                 os.popen(f'start "" "{film["directory"].format(i)}.mkv"')
             data_handle.film_database.set_film_episode(film_id, i)
             if not (database.get_config('run') and database.get_app()):
@@ -85,6 +87,8 @@ def run(film_id, start, end, is_play=True):
 
 def play_video(directory, is_play):
     if is_play:
+        if video_is_running():
+            kill_video_player()
         os.popen(f'start "" "{directory}"')
 
 
