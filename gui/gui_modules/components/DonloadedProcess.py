@@ -86,5 +86,5 @@ class DownloadedProcess(QWidget):
     def set_progress_bar(self):
         self.download = DownloadManager.get_download(self.dir)
         if self.download:
-            self.download_percent = int(self.download.dl / DownloadManager.set_download_len(self.dir, 1) * 100)
+            self.download_percent = int(self.download.dl / DownloadManager.get_download_len(self.dir, 100) * 100)
             self.progressBar.setValue(self.download_percent)

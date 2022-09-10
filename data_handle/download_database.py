@@ -29,7 +29,8 @@ def set_download(directory, value):
 def get_download_init():
     return {
         "link": "",
-        "total": 0
+        "total": 0,
+        "query": "",
     }
 
 

@@ -12,13 +12,16 @@ import time
 from io import BytesIO
 import subprocess
 
+from selenium.webdriver.chrome.options import Options
+
 import data_handle.download_database
 from data_handle import database
 import sys
 from bs4 import BeautifulSoup
 import threading
 
-proxyDict = database.get_proxy()
+from selenium import webdriver
+from selenium.webdriver.common.by import By
 
 
 def get_init_header():
@@ -363,8 +366,9 @@ def download_sub(sub, directory, episode, offset=0):
 
 def download_video(video, directory, episode, callback=lambda: None, sync=False, offset=0):
     video_link = video["link"]
+    video_query = video["query"]
     directory = directory.format(episode) + '.'
-    if  video_link[-3:] in ['mp4','mkv']:
+    if video_link[-3:] in ['mp4', 'mkv']:
         directory += video_link[-3:]
     else:
         directory += 'mkv'
@@ -375,7 +379,7 @@ def download_video(video, directory, episode, callback=lambda: None, sync=False,
             return True
 
     database.log(f"downloading start {link}")
-    video = DownloadManager.new(directory, link)
+    video = DownloadManager.new(directory, link, video_query)
     video.set_callback(callback)
     return video.start(sync)
 
@@ -407,11 +411,12 @@ def download_all_callback(video_link, sub_link, directory, episode, callback):
 
 
 class Download:
-    def __init__(self, directory, link):
+    def __init__(self, directory, link, query=""):
         global headers
         global cookies
         self.dir = directory
         self.link = link
+        self.query = query
         self.callback = lambda: None
         self.is_stopped = True
         self.is_downloading = False
@@ -443,18 +448,52 @@ class Download:
         self.set_pre_start_request()
         if self.use_proxy:
             self.response = requests.get(self.link, stream=True, timeout=30, headers=self.headers, cookies=self.cookies,
-                                         proxies=proxyDict)
+                                         proxies=proxyDict, verify=False)
         else:
-            self.response = requests.get(self.link, headers=self.headers, cookies=self.cookies, stream=True, timeout=30)
+            self.response = requests.get(self.link, headers=self.headers, cookies=self.cookies, stream=True, timeout=30,
+                                         verify=False)
 
         self.response.raise_for_status()
         self.total = self.response.headers.get('content-length')
         if self.total is None:
-            self.response.close()
-            raise RuntimeError("response is not file")
+            if self.query:
+                query = self.query.split("|")
+                q = query[0]
+                chrome_options = Options()
+                chrome_options.add_argument('--ignore-certificate-errors')
+                chrome_options.add_argument("--disable-extensions")
+                chrome_options.add_argument("--log-level=3")  # fatal
+                chrome_options.add_argument('disable-infobars')
+                if q.startswith("jblock:"):
+                    chrome_options.add_experimental_option("prefs",
+                                                           {'profile.managed_default_content_settings.javascript': 2})
+                    q = q[7:]
+                else:
+                    print("hellllllllll")
+                driver = webdriver.Chrome(chrome_options=chrome_options)
+                driver.get(self.link)
+                links = driver.find_elements(By.CSS_SELECTOR, q)
+                # soup = BeautifulSoup(self.response.content, 'html.parser')
+                # links = soup.select(query[0].strip())
+                link = ''
+                for l in links:
+                    link = l.get_attribute("href")
+                for arg in self.response.cookies:
+                    self.cookies[arg.name] = arg.value
+                if not link:
+                    raise RuntimeError("link not found")
+
+                self.link = link
+                self.query = '|'.join(query[1:])
+                driver.close()
+                return self.init_request()
+
+            else:
+                self.response.close()
+                raise RuntimeError("response is not file")
 
         self.total = int(self.total) + self.dl
-        DownloadManager.set_download(self.dir, self.link)
+        DownloadManager.set_download(self.dir, self.link, self.query)
         DownloadManager.set_download_len(self.dir, self.total)
 
     def start(self, sync=False):
@@ -525,10 +564,11 @@ class DownloadManager:
     def init():
         DownloadManager.downloads_data = data_handle.download_database.get_download_all()
         for directory in DownloadManager.downloads_data:
-            DownloadManager.download_list.append(Download(directory, DownloadManager.downloads_data[directory]["link"]))
+            DownloadManager.download_list.append(Download(directory, DownloadManager.downloads_data[directory]["link"],
+                                                          DownloadManager.downloads_data[directory]["query"]))
 
     @staticmethod
-    def new(directory, link):
+    def new(directory, link, query=""):
         for download in DownloadManager.download_list:
             if download.dir == directory:
                 if download.link == link:
@@ -538,7 +578,7 @@ class DownloadManager:
                         DownloadManager.download_list.remove(download)
                     else:
                         return download
-        download = Download(directory, link)
+        download = Download(directory, link, query)
         DownloadManager.download_list.append(download)
 
         return download
@@ -562,16 +602,23 @@ class DownloadManager:
         return DownloadManager.downloads_data[directory]["total"]
 
     @staticmethod
+    def get_download_len(directory, default):
+        if DownloadManager.downloads_data.get(directory) and not DownloadManager.downloads_data[directory].get("total"):
+            return default
+        return DownloadManager.downloads_data[directory]["total"]
+
+    @staticmethod
     def is_downloading(directory):
         dl = DownloadManager.get_download(directory)
         return dl.downloading_thread and dl.downloading_thread.is_alive()
 
     @staticmethod
-    def set_download(directory, link):
+    def set_download(directory, link, query=""):
         if DownloadManager.downloads_data.get(directory):
             return
         download_data = data_handle.download_database.get_download_init()
         download_data["link"] = link
+        download_data["query"] = query
         download_data["total"] = 0
         data_handle.download_database.set_download(directory, download_data)
         DownloadManager.downloads_data[directory] = download_data
