@@ -50,7 +50,8 @@ def set_download_status(directory, value):
 
 def remove_download(directory):
     d = get_download_all()
-    del d[directory]
+    if d.get(directory):
+        del d[directory]
     f = open(BASE_DATA_PATH + '/download.json', 'w')
     f.write(json.dumps(d))
     f.close()

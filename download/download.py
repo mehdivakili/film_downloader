@@ -455,6 +455,7 @@ class Download:
 
         self.response.raise_for_status()
         self.total = self.response.headers.get('content-length')
+        self.query = self.query.strip()
         if self.total is None:
             if self.query:
                 query = self.query.split("|")
@@ -468,8 +469,6 @@ class Download:
                     chrome_options.add_experimental_option("prefs",
                                                            {'profile.managed_default_content_settings.javascript': 2})
                     q = q[7:]
-                else:
-                    print("hellllllllll")
                 driver = webdriver.Chrome(chrome_options=chrome_options)
                 driver.get(self.link)
                 links = driver.find_elements(By.CSS_SELECTOR, q)
